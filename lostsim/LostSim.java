@@ -14,30 +14,40 @@ public class LostSim {
     private static final int POSITION_MASK = (1 << POSITION_BITS) - 1;
 
     private final int worldSize;
-    private final int visitSize;
-    private final long[] lastVisitedTick;
+    private final int viewSize;
+    private final long[] lastViewedTick;
     private final Random random = new Random();
     private long currentTick;
+    private List<Integer> randomizeView;
 
-    public World(int worldSize, int visitSize) {
+    public World(int worldSize, int viewSize) {
       this.worldSize = worldSize;
-      this.visitSize = visitSize;
-      this.lastVisitedTick = new long[worldSize * worldSize];
+      this.viewSize = viewSize;
+      this.lastViewedTick = new long[worldSize * worldSize];
       this.currentTick = worldSize * worldSize;
-      initializeLastVisitedTicks();
+      initializeLastViewedTicks();
+      initializeRandomizeView();
     }
 
-    private void initializeLastVisitedTicks() {
-      List<Integer> ticks = new ArrayList<>(lastVisitedTick.length);
-      for (int i = 1; i <= lastVisitedTick.length; i++) {
+    private void initializeLastViewedTicks() {
+      List<Integer> ticks = new ArrayList<>(lastViewedTick.length);
+      for (int i = 1; i <= lastViewedTick.length; i++) {
         ticks.add(i);
       }
       Collections.shuffle(ticks);
       int i = 0;
       for (int y = 0; y < worldSize; y++) {
         for (int x = 0; x < worldSize; x++) {
-          lastVisitedTick[y * worldSize + x] = encodeOpaque(x, y, ticks.get(i++));
+          lastViewedTick[y * worldSize + x] = encodeOpaque(x, y, ticks.get(i++));
         }
+      }
+    }
+
+    private void initializeRandomizeView() {
+      int size = (2 * viewSize + 1) * (2 * viewSize + 1);
+      randomizeView = new ArrayList<>(size);
+      for (int i = 0; i < size; i++) {
+        randomizeView.add(i + 1);
       }
     }
 
@@ -45,29 +55,33 @@ public class LostSim {
       return (t << (2 * POSITION_BITS)) + (y << POSITION_BITS) + x;
     }
 
-    public void visit(int x, int y) {
-      long t = ++currentTick;
-      int jmin = Math.max(y - visitSize, 0);
-      int imin = Math.max(x - visitSize, 0);
-      int jmax = Math.min(y + visitSize, worldSize - 1);
-      int imax = Math.min(x + visitSize, worldSize - 1);
-      for (int j = jmin; j <= jmax; j++) {
-        for (int i = imin; i <= imax; i++) {
-          lastVisitedTick[y * worldSize + x] = encodeOpaque(x, y, t);
+    public void view(int x, int y) {
+      int jmin = Math.max(y - viewSize, 0);
+      int imin = Math.max(x - viewSize, 0);
+      int jmax = Math.min(y + viewSize, worldSize - 1);
+      int imax = Math.min(x + viewSize, worldSize - 1);
+      if (viewSize > 0) {
+        Collections.shuffle(randomizeView);
+      }
+      for (int j = jmin, v = 0; j <= jmax; j++) {
+        for (int i = imin; i <= imax; i++, v++) {
+          int p = randomizeView.get(v);
+          lastViewedTick[y * worldSize + x] = encodeOpaque(x, y, currentTick + p);
         }
       }
+      currentTick += randomizeView.size();
     }
 
     /** Returns opaque value; get position with decodeX and decodeY */
     public long pickOld(double oldRatio) {
-      long[] copy = Arrays.copyOf(lastVisitedTick, lastVisitedTick.length);
+      long[] copy = Arrays.copyOf(lastViewedTick, lastViewedTick.length);
       Arrays.sort(copy);
       return copy[random.nextInt(1 + (int) (oldRatio * copy.length))];
     }
 
     /** Returns opaque value; get position with decodeX and decodeY */
     public long pickYoung(double youngRatio) {
-      long[] copy = Arrays.copyOf(lastVisitedTick, lastVisitedTick.length);
+      long[] copy = Arrays.copyOf(lastViewedTick, lastViewedTick.length);
       Arrays.sort(copy);
       int length = copy.length;
       return copy[length - 1 - random.nextInt(1 + (int) (youngRatio * length))];
@@ -85,7 +99,7 @@ public class LostSim {
       StringBuilder sb = new StringBuilder();
       for (int y = 0; y < worldSize; y++) {
         for (int x = 0; x < worldSize; x++) {
-          long t = lastVisitedTick[(y * worldSize) + x] >> (2 * POSITION_BITS);
+          long t = lastViewedTick[(y * worldSize) + x] >> (2 * POSITION_BITS);
           sb.append(String.format("  (%d:x %d:y %2d:t)", x, y, t));
         }
         sb.append("\n");
@@ -103,8 +117,8 @@ public class LostSim {
     private int targetX;
     private int targetY;
 
-    public Wanderer(int worldSize, int visitSize, double oldRatio) {
-      this.world = new World(worldSize, visitSize);
+    public Wanderer(int worldSize, int viewSize, double oldRatio) {
+      this.world = new World(worldSize, viewSize);
       this.oldRatio = oldRatio;
       this.random = new Random();
       pickCurrent();
@@ -115,7 +129,7 @@ public class LostSim {
       long opaque = world.pickYoung((oldRatio < 0.5) ? oldRatio : (1 - oldRatio));
       currentX = world.decodeX(opaque);
       currentY = world.decodeY(opaque);
-      world.visit(currentX, currentY);
+      world.view(currentX, currentY);
     }
 
     private void pickTarget() {
@@ -149,7 +163,7 @@ public class LostSim {
           currentY++;
         }
       }
-      world.visit(currentX, currentY);
+      world.view(currentX, currentY);
     }
 
     public int getCurrentX() {
@@ -170,26 +184,27 @@ public class LostSim {
 
   public static void main(String... args) {
     double oldRatio = 0.1;
-    int visitSize = 10;
+    int viewSize = 10;
     int maxTrials = 1000;
     long[] foundTicks = new long[maxTrials];
     String resultFmt = "%8s %8s %8s %8s %8s %8s %8s %8s %8s\n";
     System.out.format("oldRatio = %f\n", oldRatio);
-    System.out.format("visitSize = %d\n", visitSize);
+    System.out.format("viewSize = %d\n", viewSize);
     System.out.format("maxTrials = %d\n", maxTrials);
     System.out.println();
-    System.out.format(
-        resultFmt, "World", "Seeker", "2%ile", "10%ile", "25%ile", "50%ile", "75%ile", "90%ile", "98%ile");
+    System.out.format( resultFmt,
+        "World", "Seeker", "2%ile", "10%ile", "25%ile", "50%ile", "75%ile", "90%ile", "98%ile");
     String sep = "--------";
     System.out.format(resultFmt, sep, sep, sep, sep, sep, sep, sep, sep, sep);
     for (int worldSize : Arrays.asList(20, 40, 80, 160, 320)) {
-      for (boolean moveSeeker : Arrays.asList(false, true)) {
+      //for (boolean moveSeeker : Arrays.asList(false, true)) {
+      for (boolean moveSeeker : Arrays.asList(false)) {
         Arrays.fill(foundTicks, 0);
         for (int trial = 0; trial < maxTrials; trial++) {
-          Wanderer seeker = new Wanderer(worldSize, visitSize, oldRatio);
-          Wanderer tourist = new Wanderer(worldSize, visitSize, oldRatio);
+          Wanderer seeker = new Wanderer(worldSize, viewSize, oldRatio);
+          Wanderer tourist = new Wanderer(worldSize, viewSize, oldRatio);
           long ticks = 0;
-          while (!isFound(seeker, tourist, visitSize)) {
+          while (!isFound(seeker, tourist, viewSize)) {
             if (moveSeeker) {
               seeker.tick();
             }
