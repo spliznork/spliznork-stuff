@@ -66,7 +66,7 @@ public class LostSim {
       for (int j = jmin, v = 0; j <= jmax; j++) {
         for (int i = imin; i <= imax; i++, v++) {
           int p = randomizeView.get(v);
-          lastViewedTick[y * worldSize + x] = encodeOpaque(x, y, currentTick + p);
+          lastViewedTick[j * worldSize + i] = encodeOpaque(i, j, currentTick + p);
         }
       }
       currentTick += randomizeView.size();
@@ -83,8 +83,7 @@ public class LostSim {
     public long pickYoung(double youngRatio) {
       long[] copy = Arrays.copyOf(lastViewedTick, lastViewedTick.length);
       Arrays.sort(copy);
-      int length = copy.length;
-      return copy[length - 1 - random.nextInt(1 + (int) (youngRatio * length))];
+      return copy[copy.length - 1 - random.nextInt(1 + (int) (youngRatio * copy.length))];
     }
 
     public int decodeX(long opaque) {
@@ -197,8 +196,7 @@ public class LostSim {
     String sep = "--------";
     System.out.format(resultFmt, sep, sep, sep, sep, sep, sep, sep, sep, sep);
     for (int worldSize : Arrays.asList(20, 40, 80, 160, 320)) {
-      //for (boolean moveSeeker : Arrays.asList(false, true)) {
-      for (boolean moveSeeker : Arrays.asList(false)) {
+      for (boolean moveSeeker : Arrays.asList(false, true)) {
         Arrays.fill(foundTicks, 0);
         for (int trial = 0; trial < maxTrials; trial++) {
           Wanderer seeker = new Wanderer(worldSize, viewSize, oldRatio);
