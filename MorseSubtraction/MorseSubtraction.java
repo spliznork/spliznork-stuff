@@ -1,6 +1,3 @@
-// Seems to get the wrong answer for STARWARS YODA LEIA. This program gets
-// 26,712 solutions but we expect 11,474 solutions.
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -64,8 +61,7 @@ public class MorseSubtraction {
   }
 
   public static Set<String> bruteForceSequence(List<String> messages) {
-    Set<String> results = new HashSet<>();
-    results.add(messages.get(0));
+    Set<String> results = Collections.singleton(messages.get(0));
     for (int i = 1; i < messages.size(); i++) {
       String b = messages.get(i);
       Set<String> newResults = new HashSet<>();
@@ -105,7 +101,7 @@ public class MorseSubtraction {
 
     if (remainingNeedle.length() >= remainingHaystack.length()) {
       if (remainingNeedle.equals(remainingHaystack)) {
-        results.add(partial + remainingHaystack);
+        results.add(partial);
       }
       return;
     }
